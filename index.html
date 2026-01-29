@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>WeiFeng AI - 測試模式</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(20, 20, 20, 0.9); padding: 20px; border-radius: 15px; width: 250px; border: 1px solid #444; }
+        h1 { margin: 0; font-size: 1.2rem; color: #ff4d4d; } /* 測試模式用紅色 */
+        #timer { font-size: 2.5rem; font-weight: bold; margin: 10px 0; font-family: monospace; color: #0f0; }
+        button { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #mockBtn { background: #ff8800; color: white; } /* 模擬按鈕 */
+        #syncBtn { background: #444; color: white; }
+        #status { font-size: 12px; color: #aaa; margin-top: 10px; }
+        #canvas-container { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>WeiFeng AI (預覽)</h1>
+    <div id="timer">00:00.00</div>
+    <button id="mockBtn">🎲 模擬轉動一次</button>
+    <button id="syncBtn">🔄 同步 (重置 3D 狀態)</button>
+    <div id="status">目前環境不支援藍牙。<br>點擊上方按鈕模擬魔方轉動。</div>
+</div>
+
+<div id="canvas-container"></div>
+
+<script>
+    let scene, camera, renderer, cubeGroup;
+
+    function init3D() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        cubeGroup = new THREE.Group();
+        const colors = [0xffffff, 0xffff00, 0xff0000, 0xffa500, 0x00ff00, 0x0000ff];
+        
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                for (let z = -1; z <= 1; z++) {
+                    const geometry = new THREE.BoxGeometry(0.92, 0.92, 0.92);
+                    const materials = colors.map(c => new THREE.MeshLambertMaterial({ color: c }));
+                    const piece = new THREE.Mesh(geometry, materials);
+                    piece.position.set(x, y, z);
+                    cubeGroup.add(piece);
+                }
+            }
+        }
+        scene.add(cubeGroup);
+
+        const light1 = new THREE.DirectionalLight(0xffffff, 1);
+        light1.position.set(5, 5, 5);
+        scene.add(light1);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        camera.position.set(4, 4, 6);
+        camera.lookAt(0, 0, 0);
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+
+    // --- 模擬旋轉邏輯 ---
+    document.getElementById('mockBtn').onclick = () => {
+        // 隨機旋轉 90 度
+        const axis = ['x', 'y', 'z'][Math.floor(Math.random() * 3)];
+        cubeGroup.rotation[axis] += Math.PI / 2;
+        document.getElementById('status').innerText = "模擬轉動: " + axis.toUpperCase();
+    };
+
+    // --- 同步鍵：強制歸零 ---
+    document.getElementById('syncBtn').onclick = () => {
+        cubeGroup.rotation.set(0, 0, 0);
+        document.getElementById('status').innerText = "狀態已同步：已復原";
+    };
+
+    init3D();
+</script>
+</body>
+</html>
