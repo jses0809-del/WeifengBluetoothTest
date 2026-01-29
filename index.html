@@ -2,17 +2,15 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - Bluetooth Link</title>
+    <title>WeiFeng AI - Link Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #00e5ff; font-family: 'Courier New', monospace; overflow: hidden; }
-        #panel { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(15, 15, 15, 0.95); padding: 25px; border-radius: 20px; border: 2px solid #00e5ff; width: 280px; box-shadow: 0 0 20px #00e5ff33; }
-        h1 { margin: 0 0 15px 0; font-size: 1.4rem; text-align: center; letter-spacing: 2px; }
-        .status-box { border: 1px solid #333; padding: 10px; font-size: 0.8rem; margin-bottom: 20px; color: #888; background: #000; min-height: 40px; }
-        button { width: 100%; padding: 15px; margin-bottom: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.3s; }
+        body { margin: 0; background: #000; color: #00e5ff; font-family: sans-serif; overflow: hidden; }
+        #panel { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(15, 15, 15, 0.9); padding: 25px; border-radius: 20px; border: 2px solid #00e5ff; width: 280px; }
+        .status-box { border: 1px solid #333; padding: 10px; font-size: 0.8rem; margin-bottom: 20px; background: #000; min-height: 50px; white-space: pre-wrap; word-break: break-all; }
+        button { width: 100%; padding: 15px; margin-bottom: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1rem; }
         #connectBtn { background: linear-gradient(45deg, #007bff, #00e5ff); color: white; }
-        #syncBtn { background: #333; color: #00e5ff; border: 1px solid #00e5ff; }
-        button:hover { transform: scale(1.03); filter: brightness(1.2); }
+        #syncBtn { background: #222; color: #00e5ff; border: 1px solid #00e5ff; }
         #canvas-container { width: 100vw; height: 100vh; }
     </style>
 </head>
@@ -20,20 +18,19 @@
 
 <div id="panel">
     <h1>WeiFeng AI</h1>
-    <div id="status" class="status-box">準備就緒：等待連線...</div>
+    <div id="status" class="status-box">狀態：準備就緒</div>
     <button id="connectBtn">⚡ 連結 GAN 魔方</button>
     <button id="syncBtn">🔄 同步 (模型回正)</button>
-    <div style="font-size: 0.7rem; color: #555;">注意：請確保使用支援藍牙的環境開啟此 HTML</div>
+    <div style="font-size: 0.7rem; color: #555;">提示：若連線失敗，請嘗試重啟魔方藍牙（按住魔方或充電）</div>
 </div>
 
 <div id="canvas-container"></div>
 
 <script>
     let scene, camera, renderer, cubeGroup;
-    const SERVICE_UUID = '00001a00-0000-1000-8000-00805f9b34fb';
-    const CHARACTER_UUID = '00001a01-0000-1000-8000-00805f9b34fb';
+    const statusDiv = document.getElementById('status');
 
-    // --- 3D 渲染系統 (一整顆魔方，不再是正方形) ---
+    // --- 3D 渲染 (確保不崩潰) ---
     function init3D() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -42,7 +39,6 @@
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         cubeGroup = new THREE.Group();
-        // 建立 27 個小方塊
         const colors = [0xffffff, 0xffff00, 0xff0000, 0xffa500, 0x00ff00, 0x0000ff];
         for (let x = -1; x <= 1; x++) {
             for (let y = -1; y <= 1; y++) {
@@ -56,11 +52,7 @@
             }
         }
         scene.add(cubeGroup);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const light = new THREE.PointLight(0xffffff, 1);
-        light.position.set(10, 10, 10);
-        scene.add(light);
-
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
         camera.position.set(4, 4, 5);
         camera.lookAt(0, 0, 0);
         animate();
@@ -71,54 +63,48 @@
         renderer.render(scene, camera);
     }
 
-    // --- 藍牙核心功能 ---
-    const statusDiv = document.getElementById('status');
-
+    // --- 強化版連線邏輯 ---
     document.getElementById('connectBtn').onclick = async () => {
-        if (!navigator.bluetooth) {
-            statusDiv.style.color = "#ff4444";
-            statusDiv.innerText = "❌ 失敗：Safari/Google 不支援藍牙。";
-            alert("目前環境無法連線藍牙。請上傳至 GitHub 並用 Bluefy 或電腦 Chrome 開啟。");
-            return;
-        }
-
         try {
-            statusDiv.innerText = "🔍 搜尋 GAN 魔方中...";
+            statusDiv.innerText = "🔍 正在搜尋設備...";
+            
+            // 使用「接受所有設備」模式來測試，這最不容易報 UUID 錯誤
             const device = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'GAN' }],
-                optionalServices: [SERVICE_UUID]
+                acceptAllDevices: true,
+                optionalServices: ['00001a00-0000-1000-8000-00805f9b34fb', '0000180a-0000-1000-8000-00805f9b34fb']
             });
 
+            statusDiv.innerText = `⏳ 嘗試連線到: ${device.name}...`;
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(SERVICE_UUID);
-            const characteristic = await service.getCharacteristic(CHARACTER_UUID);
-
-            await characteristic.startNotifications();
-            statusDiv.style.color = "#00ff88";
-            statusDiv.innerText = "✅ 已成功連線至 " + device.name;
-
-            characteristic.addEventListener('characteristicvaluechanged', (e) => {
-                // 當你轉動魔方，這段代碼會被觸發
-                // 我們讓 3D 魔方隨機轉一下，證明連線成功
-                cubeGroup.rotation.y += Math.PI / 2;
-                statusDiv.innerText = "接收轉動數據中...";
-            });
-
+            
+            // 自動偵測可用服務
+            const services = await server.getPrimaryServices();
+            statusDiv.innerText = `✅ 連線成功！\n偵測到 ${services.length} 個服務。`;
+            
+            // 嘗試尋找 GAN 的核心特徵
+            for (const service of services) {
+                const chars = await service.getCharacteristics();
+                for (const char of chars) {
+                    if (char.properties.notify) {
+                        await char.startNotifications();
+                        char.addEventListener('characteristicvaluechanged', () => {
+                            cubeGroup.rotation.y += Math.PI / 4;
+                            statusDiv.innerText = "⚡ 收到魔方轉動訊號！";
+                        });
+                        statusDiv.innerText = "🟢 數據通道已開啟，轉轉看！";
+                        return;
+                    }
+                }
+            }
         } catch (err) {
-            statusDiv.innerText = "連線失敗：" + err.message;
+            statusDiv.style.color = "#ff4444";
+            statusDiv.innerText = "❌ 失敗：" + err.message;
         }
     };
 
-    // --- 同步鍵：強制歸零 ---
     document.getElementById('syncBtn').onclick = () => {
         cubeGroup.rotation.set(0, 0, 0);
-        statusDiv.innerText = "狀態同步：已歸位為復原狀態";
-    };
-
-    window.onresize = () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        statusDiv.innerText = "狀態：已執行同步回正";
     };
 
     init3D();
