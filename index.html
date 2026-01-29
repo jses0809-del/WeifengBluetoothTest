@@ -2,15 +2,17 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - Link Pro</title>
+    <title>WeiFeng AI - Bluetooth Link Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body { margin: 0; background: #000; color: #00e5ff; font-family: sans-serif; overflow: hidden; }
-        #panel { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(15, 15, 15, 0.9); padding: 25px; border-radius: 20px; border: 2px solid #00e5ff; width: 280px; }
-        .status-box { border: 1px solid #333; padding: 10px; font-size: 0.8rem; margin-bottom: 20px; background: #000; min-height: 50px; white-space: pre-wrap; word-break: break-all; }
-        button { width: 100%; padding: 15px; margin-bottom: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1rem; }
-        #connectBtn { background: linear-gradient(45deg, #007bff, #00e5ff); color: white; }
-        #syncBtn { background: #222; color: #00e5ff; border: 1px solid #00e5ff; }
+        #panel { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(15, 15, 15, 0.95); padding: 25px; border-radius: 20px; border: 2px solid #00e5ff; width: 280px; box-shadow: 0 0 15px #00e5ff55; }
+        h1 { margin: 0 0 15px 0; font-size: 1.5rem; text-align: center; }
+        .status-box { border: 1px solid #333; padding: 12px; font-size: 0.85rem; margin-bottom: 20px; background: #050505; min-height: 60px; color: #ffbc00; }
+        button { width: 100%; padding: 15px; margin-bottom: 12px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.2s; }
+        #connectBtn { background: linear-gradient(45deg, #007bff, #00d4ff); color: white; }
+        #syncBtn { background: #222; color: #00d4ff; border: 1px solid #00d4ff; }
+        button:active { transform: scale(0.95); }
         #canvas-container { width: 100vw; height: 100vh; }
     </style>
 </head>
@@ -18,10 +20,10 @@
 
 <div id="panel">
     <h1>WeiFeng AI</h1>
-    <div id="status" class="status-box">狀態：準備就緒</div>
-    <button id="connectBtn">⚡ 連結 GAN 魔方</button>
+    <div id="status" class="status-box">請確保魔方已喚醒（轉動幾下）然後點擊下方按鈕。</div>
+    <button id="connectBtn">⚡ 連結我的 GAN 魔方</button>
     <button id="syncBtn">🔄 同步 (模型回正)</button>
-    <div style="font-size: 0.7rem; color: #555;">提示：若連線失敗，請嘗試重啟魔方藍牙（按住魔方或充電）</div>
+    <div style="font-size: 0.7rem; color: #555; text-align: center;">WeiFeng AI 專屬測試工具</div>
 </div>
 
 <div id="canvas-container"></div>
@@ -30,7 +32,7 @@
     let scene, camera, renderer, cubeGroup;
     const statusDiv = document.getElementById('status');
 
-    // --- 3D 渲染 (確保不崩潰) ---
+    // --- 1. 3D 初始化 ---
     function init3D() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -63,48 +65,53 @@
         renderer.render(scene, camera);
     }
 
-    // --- 強化版連線邏輯 ---
+    // --- 2. 藍牙連線 (針對 Chrome 優化) ---
     document.getElementById('connectBtn').onclick = async () => {
         try {
-            statusDiv.innerText = "🔍 正在搜尋設備...";
+            statusDiv.style.color = "#ffbc00";
+            statusDiv.innerText = "🔍 搜尋設備中...\n(請點選名稱為 GAN 的裝置)";
             
-            // 使用「接受所有設備」模式來測試，這最不容易報 UUID 錯誤
             const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: ['00001a00-0000-1000-8000-00805f9b34fb', '0000180a-0000-1000-8000-00805f9b34fb']
+                filters: [{ namePrefix: 'GAN' }],
+                optionalServices: [
+                    '00001a00-0000-1000-8000-00805f9b34fb',
+                    '6e400001-b5a3-f393-e0a9-e50e24dcca9e' // 部分新版 GAN 可能使用的服務
+                ]
             });
 
-            statusDiv.innerText = `⏳ 嘗試連線到: ${device.name}...`;
+            statusDiv.innerText = "⏳ 正在建立加密連線...";
             const server = await device.gatt.connect();
             
-            // 自動偵測可用服務
-            const services = await server.getPrimaryServices();
-            statusDiv.innerText = `✅ 連線成功！\n偵測到 ${services.length} 個服務。`;
-            
-            // 嘗試尋找 GAN 的核心特徵
-            for (const service of services) {
-                const chars = await service.getCharacteristics();
-                for (const char of chars) {
-                    if (char.properties.notify) {
-                        await char.startNotifications();
-                        char.addEventListener('characteristicvaluechanged', () => {
-                            cubeGroup.rotation.y += Math.PI / 4;
-                            statusDiv.innerText = "⚡ 收到魔方轉動訊號！";
-                        });
-                        statusDiv.innerText = "🟢 數據通道已開啟，轉轉看！";
-                        return;
-                    }
-                }
-            }
+            // 嘗試取得主服務
+            const service = await server.getPrimaryService('00001a00-0000-1000-8000-00805f9b34fb');
+            const char = await service.getCharacteristic('00001a01-0000-1000-8000-00805f9b34fb');
+
+            await char.startNotifications();
+            statusDiv.style.color = "#00ff88";
+            statusDiv.innerText = "✅ 已成功連線！\n轉動魔方測試看看。";
+
+            char.addEventListener('characteristicvaluechanged', (e) => {
+                // 收到轉動數據時讓模型轉動
+                cubeGroup.rotation.y += Math.PI / 4;
+                statusDiv.innerText = "⚡ 收到數據：魔方正在轉動";
+            });
+
+            device.addEventListener('gattserverdisconnected', () => {
+                statusDiv.style.color = "#ff4444";
+                statusDiv.innerText = "❌ 連線已斷開，請重新連結。";
+            });
+
         } catch (err) {
             statusDiv.style.color = "#ff4444";
-            statusDiv.innerText = "❌ 失敗：" + err.message;
+            statusDiv.innerText = "❌ 失敗：" + err.message + "\n\n提示：請嘗試轉動魔方幾下再試。";
         }
     };
 
+    // --- 3. 同步按鈕 (你最需要的功能) ---
     document.getElementById('syncBtn').onclick = () => {
         cubeGroup.rotation.set(0, 0, 0);
-        statusDiv.innerText = "狀態：已執行同步回正";
+        statusDiv.style.color = "#00d4ff";
+        statusDiv.innerText = "🔄 同步成功：3D 模型已回正";
     };
 
     init3D();
