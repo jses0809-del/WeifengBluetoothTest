@@ -2,44 +2,44 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - csTimer Engine Pro</title>
+    <title>WeiFeng AI - Bluetooth Handshake Tester</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        :root { --accent: #00e5ff; }
-        body { margin: 0; background: #050505; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        #ui-layer { position: absolute; top: 20px; left: 20px; z-index: 100; width: 300px; background: rgba(20,20,20,0.9); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; }
-        .log-box { height: 120px; background: #000; border: 1px solid #333; margin-top: 15px; padding: 8px; font-family: monospace; font-size: 11px; overflow-y: auto; color: #0f0; }
-        button { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; background: var(--accent); color: #000; }
-        #syncBtn { background: #333; color: var(--accent); border: 1px solid var(--accent); }
-        #timer-val { font-size: 3rem; text-align: center; margin: 10px 0; font-family: monospace; }
+        body { margin: 0; background: #000; color: #00e5ff; font-family: 'Courier New', monospace; overflow: hidden; }
+        #console { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(10, 10, 10, 0.9); padding: 20px; border: 1px solid #00e5ff; border-radius: 10px; width: 320px; box-shadow: 0 0 15px #00e5ff44; }
+        .log { height: 150px; background: #000; border: 1px solid #333; margin-top: 10px; padding: 5px; font-size: 11px; overflow-y: auto; color: #0f0; }
+        button { width: 100%; padding: 15px; margin-top: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #00e5ff; color: #000; }
+        #syncBtn { background: #222; color: #00e5ff; border: 1px solid #00e5ff; }
     </style>
 </head>
 <body>
 
-<div id="ui-layer">
-    <h2 style="margin:0; font-size:1.2rem; color:var(--accent);">WeiFeng AI Engine</h2>
-    <div id="timer-val">00.00</div>
-    <button id="connectBtn">⚡ 連結智能魔方 (GAN)</button>
-    <button id="syncBtn">🔄 狀態同步</button>
-    <div class="log-box" id="debugLog">系統就緒...參考 csTimer 協議。</div>
+<div id="console">
+    <h2 style="margin:0; font-size:1.1rem;">WeiFeng 藍牙協議測試</h2>
+    <div class="log" id="statusLog">> 系統就緒，等待 Chrome 授權...</div>
+    <button id="connectBtn">⚡ 執行 csTimer 協議連結</button>
+    <button id="syncBtn">🔄 模型同步回正</button>
+    <p style="font-size:10px; color:#555; margin-top:10px;">參考來源: csTimer/src/js/bluetooth/gan.js</p>
 </div>
 
 <div id="canvas-container"></div>
 
 <script>
-    let scene, camera, renderer, cube;
-    const logEl = document.getElementById('debugLog');
-    
-    function log(msg) {
-        logEl.innerHTML += `<div>> ${msg}</div>`;
-        logEl.scrollTop = logEl.scrollHeight;
+    let cube;
+    const logBox = document.getElementById('statusLog');
+    const GAN_SERVICE = '00001a00-0000-1000-8000-00805f9b34fb';
+    const GAN_CHAR = '00001a01-0000-1000-8000-00805f9b34fb';
+
+    function addLog(msg) {
+        logBox.innerHTML += `<div>> ${msg}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
     }
 
-    // --- 3D 視覺 (csTimer 風格) ---
-    function initVisuals() {
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+    // --- 3D 視覺顯示 ---
+    function init3D() {
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
@@ -48,65 +48,59 @@
         for (let x = -1; x <= 1; x++) {
             for (let y = -1; y <= 1; y++) {
                 for (let z = -1; z <= 1; z++) {
-                    const mesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.9, 0.9, 0.9),
-                        colors.map(c => new THREE.MeshLambertMaterial({color: c}))
-                    );
-                    mesh.position.set(x, y, z);
-                    group.add(mesh);
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), colors.map(c => new THREE.MeshLambertMaterial({color:c})));
+                    m.position.set(x, y, z);
+                    group.add(m);
                 }
             }
         }
-        cube = group;
-        scene.add(cube);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-        camera.position.set(3, 3, 5);
-        camera.lookAt(0,0,0);
-        
+        cube = group; scene.add(cube);
+        scene.add(new THREE.AmbientLight(0xffffff, 1));
+        camera.position.set(3, 3, 5); camera.lookAt(0,0,0);
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
         animate();
     }
 
-    // --- 藍牙邏輯 (參考 csTimer 握手) ---
+    // --- 核心藍牙測試 (模仿 csTimer 邏輯) ---
     document.getElementById('connectBtn').onclick = async () => {
         try {
-            log("正在搜尋 GAN 設備...");
+            addLog("搜尋 GAN 魔方中...");
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ namePrefix: 'GAN' }],
-                optionalServices: [
-                    '00001a00-0000-1000-8000-00805f9b34fb', 
-                    '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-                ]
+                optionalServices: [GAN_SERVICE]
             });
 
-            log("設備已找到，正在建立安全連線...");
+            addLog("正在連線 GATT Server...");
             const server = await device.gatt.connect();
-            
-            // 嘗試偵測 csTimer 中提到的所有可能服務
-            const service = await server.getPrimaryService('00001a00-0000-1000-8000-00805f9b34fb');
-            const characteristic = await service.getCharacteristic('00001a01-0000-1000-8000-00805f9b34fb');
+            const service = await server.getPrimaryService(GAN_SERVICE);
+            const characteristic = await service.getCharacteristic(GAN_CHAR);
 
+            // csTimer 關鍵步驟：訂閱通知
             await characteristic.startNotifications();
-            log("✅ 連線成功！監聽數據中...");
+            addLog("✅ 通道開啟成功！");
 
-            characteristic.addEventListener('characteristicvaluechanged', (e) => {
-                const val = e.target.value;
-                // 此處未來需加入 AES 解密逻辑 (參考 csTimer src/js/bluetooth/gan.js)
-                log(`收到加密包: ${val.byteLength} bytes`);
-                cube.rotation.y += 0.5; // 暫時用視覺反饋
+            // 模擬 csTimer 的握手 (部分型號需要傳入指令才會開始廣播數據)
+            addLog("正在執行協議握手...");
+            
+            characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                const data = event.target.value;
+                addLog(`接收數據: ${data.byteLength} 字節 (Hex: ${data.getUint8(0).toString(16)})`);
+                
+                // 收到任何數據即代表通訊成功，讓模型轉動作為反饋
+                cube.rotation.y += 0.5;
             });
 
         } catch (err) {
-            log(`❌ 錯誤: ${err.message}`);
+            addLog(`❌ 失敗: ${err.message}`);
         }
     };
 
     document.getElementById('syncBtn').onclick = () => {
         cube.rotation.set(0, 0, 0);
-        log("模型已重置歸位。");
+        addLog("3D 狀態已重置。");
     };
 
-    initVisuals();
+    init3D();
 </script>
 </body>
 </html>
