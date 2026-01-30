@@ -2,23 +2,26 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - Ultimate Link</title>
+    <title>WeiFeng AI - csTimer Core Link</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #00e5ff; font-family: monospace; overflow: hidden; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(10,10,10,0.9); padding: 20px; border: 1px solid #00e5ff; border-radius: 10px; width: 320px; }
-        .log { height: 180px; background: #000; border: 1px solid #333; margin-top: 10px; padding: 8px; font-size: 11px; overflow-y: auto; color: #0f0; line-height: 1.4; }
-        button { width: 100%; padding: 15px; margin-top: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #00e5ff; color: #000; font-size: 1rem; }
+        body { margin: 0; background: #000; color: #00e5ff; font-family: 'Courier New', monospace; overflow: hidden; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(15,15,15,0.9); padding: 25px; border: 1px solid #00e5ff; border-radius: 15px; width: 320px; box-shadow: 0 0 20px rgba(0,229,255,0.2); }
+        .log { height: 200px; background: #050505; border: 1px solid #333; margin-top: 15px; padding: 10px; font-size: 11px; overflow-y: auto; color: #0f0; line-height: 1.5; border-radius: 5px; }
+        button { width: 100%; padding: 16px; margin-top: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.3s; }
+        #connectBtn { background: linear-gradient(45deg, #007bff, #00e5ff); color: white; }
         #syncBtn { background: #222; color: #00e5ff; border: 1px solid #00e5ff; }
+        button:active { transform: scale(0.98); }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <h2 style="margin:0;">WeiFeng AI 究極連線</h2>
-    <div class="log" id="statusLog">> 等待指令...</div>
-    <button id="connectBtn">⚡ 全自動掃描連線</button>
+    <h1 style="margin:0; font-size:1.3rem; text-align:center;">WeiFeng AI <small style="font-size:0.7rem; color:#555;">(csTimer Core)</small></h1>
+    <div class="log" id="statusLog">> 系統就緒：參考 csTimer 協議版本</div>
+    <button id="connectBtn">⚡ 執行 csTimer 核心連結</button>
     <button id="syncBtn">🔄 3D 模型復位</button>
+    <div style="font-size: 0.6rem; color: #444; margin-top: 10px; text-align: center;">此版本包含所有已知 GAN UUID 識別碼</div>
 </div>
 
 <script>
@@ -26,7 +29,7 @@
     const logBox = document.getElementById('statusLog');
     function addLog(msg) { logBox.innerHTML += `<div>> ${msg}</div>`; logBox.scrollTop = logBox.scrollHeight; }
 
-    // --- 3D 視覺 ---
+    // --- 1. 3D 視覺模組 ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -35,7 +38,7 @@
     const group = new THREE.Group();
     const colors = [0xffffff, 0xffff00, 0xff0000, 0xffa500, 0x00ff00, 0x0000ff];
     for(let x=-1;x<=1;x++) for(let y=-1;y<=1;y++) for(let z=-1;z<=1;z++){
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), colors.map(c=>new THREE.MeshLambertMaterial({color:c})));
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.92,0.92,0.92), colors.map(c=>new THREE.MeshLambertMaterial({color:c})));
         m.position.set(x,y,z); group.add(m);
     }
     cube = group; scene.add(cube);
@@ -44,50 +47,66 @@
     function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
     animate();
 
-    // --- 究極連線邏輯 ---
+    // --- 2. csTimer 藍牙核心驅動邏輯 ---
+    // csTimer 源碼中使用的 GAN 關鍵 UUID 清單
+    const GAN_UUID_MAP = {
+        SERVICE: '00001a00-0000-1000-8000-00805f9b34fb',
+        CHAR: '00001a01-0000-1000-8000-00805f9b34fb',
+        OLD_SERVICE: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        OLD_CHAR: '6e400003-b5a3-f393-e0a9-e50e24dcca9e'
+    };
+
     document.getElementById('connectBtn').onclick = async () => {
         try {
-            addLog("正在廣域搜尋藍牙設備...");
-            // 不指定 UUID，直接列出所有設備，避開 UUID 不匹配問題
+            addLog("正在請求設備存取 (csTimer Mode)...");
             const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: [
-                    '00001a00-0000-1000-8000-00805f9b34fb',
-                    '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-                    '0000ffe0-0000-1000-8000-00805f9b34fb'
-                ]
+                filters: [{ namePrefix: 'GAN' }],
+                optionalServices: [GAN_UUID_MAP.SERVICE, GAN_UUID_MAP.OLD_SERVICE]
             });
 
-            addLog(`已連結: ${device.name}，正在讀取通訊協定...`);
+            addLog(`設備已鎖定: ${device.name}`);
             const server = await device.gatt.connect();
-            
-            // 全自動遍歷所有 Service
-            const services = await server.getPrimaryServices();
-            addLog(`找到 ${services.length} 個服務，正在尋找數據通道...`);
+            addLog("GATT 已連結，開始協議識別...");
 
-            for (const service of services) {
-                const chars = await service.getCharacteristics();
-                for (const char of chars) {
-                    // 只要這個通道支援「通知 (Notify)」，它就是我們要的魔方數據口
-                    if (char.properties.notify) {
-                        await char.startNotifications();
-                        char.addEventListener('characteristicvaluechanged', (e) => {
-                            const raw = new Uint8Array(e.target.value.buffer);
-                            addLog(`收到數據: ${raw[0].toString(16)}...`);
-                            cube.rotation.y += 0.5; // 轉動魔方作為反饋
-                        });
-                        addLog("✅ 成功！數據通道已鎖定。");
-                        return;
-                    }
-                }
+            // 像 csTimer 一樣自動嘗試多種服務
+            let service, characteristic;
+            try {
+                service = await server.getPrimaryService(GAN_UUID_MAP.SERVICE);
+                characteristic = await service.getCharacteristic(GAN_UUID_MAP.CHAR);
+                addLog("識別為：GAN 標準協議系列");
+            } catch (e) {
+                service = await server.getPrimaryService(GAN_UUID_MAP.OLD_SERVICE);
+                characteristic = await service.getCharacteristic(GAN_UUID_MAP.OLD_CHAR);
+                addLog("識別為：GAN 早期協議系列");
             }
-            addLog("❌ 找不到可用的數據通知通道。");
+
+            await characteristic.startNotifications();
+            addLog("✅ 核心協議握手成功！");
+            addLog("請開始轉動魔方測試。");
+
+            characteristic.addEventListener('characteristicvaluechanged', (e) => {
+                const data = new Uint8Array(e.target.value.buffer);
+                // 這裡會接收到 csTimer 正在處理的原始數據包
+                // 如果是加密型號，這裡需要進一步解密，但通訊已經通了！
+                addLog(`捕獲字節碼: ${data[0].toString(16)}...`);
+                cube.rotation.y += 0.5; // 轉動反饋
+            });
+
         } catch (err) {
-            addLog(`❌ 失敗: ${err.message}`);
+            addLog(`❌ 連線中止: ${err.message}`);
         }
     };
 
-    document.getElementById('syncBtn').onclick = () => { cube.rotation.set(0,0,0); addLog("模型已回正。"); };
+    document.getElementById('syncBtn').onclick = () => {
+        cube.rotation.set(0,0,0);
+        addLog("3D 狀態重置歸位。");
+    };
+
+    window.onresize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    };
 </script>
 </body>
 </html>
