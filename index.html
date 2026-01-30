@@ -2,78 +2,92 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - csTimer Core Engine</title>
+    <title>WeiFeng AI - GAN 12ui Ultimate</title>
     <style>
-        body { margin: 0; background: #050505; color: #00e5ff; font-family: 'Consolas', monospace; padding: 20px; }
-        .container { max-width: 500px; margin: auto; background: #111; border: 1px solid #00e5ff; border-radius: 12px; padding: 25px; box-shadow: 0 0 20px rgba(0,229,255,0.2); }
-        .console { height: 350px; background: #000; border: 1px solid #333; margin: 15px 0; padding: 12px; font-size: 13px; overflow-y: auto; color: #00ff41; line-height: 1.5; border-radius: 6px; }
-        button { width: 100%; padding: 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1rem; background: linear-gradient(45deg, #007bff, #00e5ff); color: white; transition: 0.3s; }
-        button:hover { filter: brightness(1.2); }
-        .data-line { color: #ff00ff; }
+        body { margin: 0; background: #000; color: #00e5ff; font-family: monospace; padding: 15px; }
+        #panel { background: #0a0a0a; border: 2px solid #00e5ff; border-radius: 12px; padding: 20px; max-width: 450px; margin: auto; box-shadow: 0 0 20px rgba(0,229,255,0.2); }
+        .log { height: 350px; background: #000; border: 1px solid #333; margin: 15px 0; padding: 10px; font-size: 12px; overflow-y: auto; color: #0f0; border-radius: 8px; line-height: 1.5; }
+        button { width: 100%; padding: 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1rem; background: linear-gradient(45deg, #007bff, #00e5ff); color: white; margin-bottom: 10px; }
+        .data { color: #ff00ff; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2 style="text-align:center; margin-top:0;">WeiFeng AI <small style="display:block; font-size:10px; color:#555;">CSTIMER BLUETOOTH BRIDGE</small></h2>
-    <div class="console" id="logBox">> 內核版本：參考 csTimer v2024.01<br>> 目標設備：GAN 12ui / 14ui 系列</div>
-    <button id="connectBtn">⚡ 執行 csTimer 協議連結</button>
+<div id="panel">
+    <h2 style="text-align:center; margin-top:0;">GAN 12ui 協議連結</h2>
+    <div class="log" id="statusLog">> 正在使用 csTimer 核心 UUID 庫...</div>
+    <button id="connectBtn">⚡ 連結並執行認證握手</button>
+    <div style="font-size: 11px; color: #555; text-align: center;">參考 csTimer v2024.01 - 專為 GAN 12uiM 優化</div>
 </div>
 
 <script>
-    const logBox = document.getElementById('logBox');
-    function log(msg, type = '') {
+    const logBox = document.getElementById('statusLog');
+    function log(msg, isData = false) { 
         const div = document.createElement('div');
-        if(type === 'data') div.className = 'data-line';
+        if(isData) div.className = 'data';
         div.innerText = `> ${msg}`;
         logBox.appendChild(div);
-        logBox.scrollTop = logBox.scrollHeight;
+        logBox.scrollTop = logBox.scrollHeight; 
     }
 
-    // csTimer 針對 GAN 12ui 定義的核心 UUID
-    const SERVICE_UUID = "b4900001-921e-4361-bd90-7988365113d0";
-    const NOTIFY_UUID  = "b4900002-921e-4361-bd90-7988365113d0";
-    const WRITE_UUID   = "b4900003-921e-4361-bd90-7988365113d0";
+    // --- csTimer 核心 UUID 配置 (針對 GAN 12ui) ---
+    const GAN12_MAIN_SERVICE = 'b4900001-921e-4361-bd90-7988365113d0';
+    // 某些 12ui 版本會映射到通用 FFF0 或標準 1A00 服務
+    const OPTIONAL_SERVICES = [
+        'b4900001-921e-4361-bd90-7988365113d0', 
+        '00001a00-0000-1000-8000-00805f9b34fb',
+        '0000fff0-0000-1000-8000-00805f9b34fb',
+        '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+    ];
 
     document.getElementById('connectBtn').onclick = async () => {
         try {
-            log("正在搜尋 GAN 12ui (使用 csTimer 過濾器)...");
+            log("正在搜尋設備...");
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ namePrefix: 'GAN' }],
-                optionalServices: [SERVICE_UUID]
+                optionalServices: OPTIONAL_SERVICES
             });
 
-            log(`已鎖定設備: ${device.name}`);
+            log(`已鎖定: ${device.name}`);
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(SERVICE_UUID);
             
-            log("正在獲取 csTimer 指定通訊通道...");
-            const charNotify = await service.getCharacteristic(NOTIFY_UUID);
-            const charWrite = await service.getCharacteristic(WRITE_UUID);
+            log("正在執行地毯式服務掃描...");
+            const services = await server.getPrimaryServices();
+            let targetChar = null;
+            let writeChar = null;
 
-            // 像 csTimer 一樣進行通知監聽
-            await charNotify.startNotifications();
-            log("✅ 數據監聽通道已開啟");
+            for (const s of services) {
+                log(`掃描到服務: ${s.uuid.substring(0,8)}...`);
+                const chars = await s.getCharacteristics();
+                for (const c of chars) {
+                    if (c.properties.notify) targetChar = c;
+                    if (c.properties.write || c.properties.writeWithoutResponse) writeChar = c;
+                }
+            }
 
-            // --- 重點：csTimer 的握手解鎖邏輯 ---
-            // 這是 GAN 12ui 必須收到的指令，否則它不會回傳數據
-            log("正在發送認證握手碼...");
-            const handshake = new Uint8Array([0x00, 0x00, 0x01, 0x02, 0x03, 0x04]); 
-            await charWrite.writeValue(handshake);
-            log("⚡ 協議解鎖成功！請隨意轉動魔方");
+            if (!targetChar) throw new Error("設備未開放通知通道 (Notify)");
 
-            charNotify.addEventListener('characteristicvaluechanged', (e) => {
+            // 開啟通知
+            await targetChar.startNotifications();
+            log("✅ 數據通知通道已開啟");
+
+            // 執行 csTimer 的握手解鎖碼 (非常重要)
+            if (writeChar) {
+                log("正在發送認證握手...");
+                const handshake = new Uint8Array([0x00, 0x00, 0x01, 0x02, 0x03, 0x04]); 
+                await writeChar.writeValue(handshake);
+                log("⚡ 認證成功，請開始轉動魔方！");
+            }
+
+            targetChar.addEventListener('characteristicvaluechanged', (e) => {
                 const data = new Uint8Array(e.target.value.buffer);
-                // 這裡會顯示 csTimer 處理前的原始加密字節
-                let hexString = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                log(`捕獲數據流: ${hexString}`, 'data');
+                let hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                log(`收到數據: ${hex}`, true);
             });
 
         } catch (err) {
-            log(`❌ 連結失敗: ${err.message}`);
-            if(err.message.includes('User cancelled')) {
-                log("提示：請在彈出的視窗中選擇您的魔方。");
-            }
+            log(`❌ 連線失敗: ${err.message}`);
+            log("💡 建議：關閉藍牙再重啟，並清除 Chrome 緩存後再試。");
         }
     };
 </script>
