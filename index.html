@@ -2,107 +2,72 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - GAN 12ui Pro Link</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>WeiFeng AI - GAN 12ui Unlocker</title>
     <style>
-        body { margin: 0; background: #000; color: #00e5ff; font-family: 'Segoe UI', monospace; overflow: hidden; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(10,10,10,0.9); padding: 25px; border: 2px solid #00e5ff; border-radius: 15px; width: 320px; box-shadow: 0 0 25px rgba(0,229,255,0.3); }
-        .log { height: 220px; background: #050505; border: 1px solid #333; margin-top: 15px; padding: 12px; font-size: 11px; overflow-y: auto; color: #0f0; line-height: 1.6; border-radius: 8px; }
-        button { width: 100%; padding: 18px; margin-top: 15px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.3s; background: linear-gradient(45deg, #007bff, #00e5ff); color: white; }
-        #syncBtn { background: #222; color: #00e5ff; border: 1px solid #00e5ff; margin-top: 10px; }
-        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
+        body { margin: 0; background: #000; color: #00e5ff; font-family: monospace; padding: 20px; }
+        #console { background: #0a0a0a; border: 2px solid #00e5ff; border-radius: 15px; padding: 20px; max-width: 400px; margin: auto; }
+        .log { height: 300px; background: #000; border: 1px solid #333; margin: 15px 0; padding: 10px; font-size: 12px; overflow-y: auto; color: #0f0; border-radius: 8px; }
+        button { width: 100%; padding: 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1.2rem; background: linear-gradient(45deg, #007bff, #00e5ff); color: white; box-shadow: 0 4px 15px rgba(0,229,255,0.4); }
+        .data-stream { color: #ff00ff; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <h1 style="margin:0; font-size:1.4rem; text-align:center;">WeiFeng AI <small style="display:block; font-size:0.6rem; color:#555;">GAN 12ui/14ui ULTIMATE ENGINE</small></h1>
-    <div class="log" id="statusLog">> 偵測到您的設備為 GAN 12ui 系列<br>> 準備執行 128-bit 協議對接...</div>
-    <button id="connectBtn">⚡ 立即連結我的 GAN 12ui</button>
-    <button id="syncBtn">🔄 3D 模型復位</button>
+<div id="console">
+    <h2 style="text-align:center;">GAN 12ui 終極解鎖</h2>
+    <div class="log" id="statusLog">> 準備執行 csTimer 深度對接...</div>
+    <button id="connectBtn">⚡ 連結並發送解鎖指令</button>
 </div>
 
 <script>
-    let cube;
     const logBox = document.getElementById('statusLog');
-    function addLog(msg) { logBox.innerHTML += `<div>> ${msg}</div>`; logBox.scrollTop = logBox.scrollHeight; }
-
-    // --- 3D 視覺 (新款魔方色塊優化) ---
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    const group = new THREE.Group();
-    const colors = [0xffffff, 0xffff00, 0xff0000, 0xffa500, 0x00ff00, 0x0000ff];
-    for(let x=-1;x<=1;x++) for(let y=-1;y<=1;y++) for(let z=-1;z<=1;z++){
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.93,0.93,0.93), colors.map(c=>new THREE.MeshLambertMaterial({color:c})));
-        m.position.set(x,y,z); group.add(m);
+    function addLog(msg, isData = false) { 
+        const span = isData ? `<span class="data-stream">${msg}</span>` : msg;
+        logBox.innerHTML += `<div>> ${span}</div>`; 
+        logBox.scrollTop = logBox.scrollHeight; 
     }
-    cube = group; scene.add(cube);
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-    camera.position.set(3,3,5); camera.lookAt(0,0,0);
-    function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
-    animate();
 
-    // --- GAN 12ui / 14ui 專用 UUID 協議庫 ---
-    const GAN_PRO_SERVICES = [
-        '00001a00-0000-1000-8000-00805f9b34fb', // 標準
-        '6e400001-b5a3-f393-e0a9-e50e24dcca9e', // 舊款
-        'b4900001-921e-4361-bd90-7988365113d0', // GAN 12ui 專用
-        '0000fff0-0000-1000-8000-00805f9b34fb'  // 通用擴展
-    ];
+    // GAN 12ui / 14ui 核心服務 UUID
+    const GAN12_SERVICE = 'b4900001-921e-4361-bd90-7988365113d0';
+    const GAN12_CHAR_NOTIFY = 'b4900002-921e-4361-bd90-7988365113d0';
+    const GAN12_CHAR_WRITE = 'b4900003-921e-4361-bd90-7988365113d0';
 
     document.getElementById('connectBtn').onclick = async () => {
         try {
-            addLog("正在搜尋 GAN 12ui 系列...");
+            addLog("正在搜尋 GAN 12ui...");
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ namePrefix: 'GAN' }],
-                optionalServices: GAN_PRO_SERVICES
+                optionalServices: [GAN12_SERVICE]
             });
 
             addLog(`已鎖定: ${device.name}`);
             const server = await device.gatt.connect();
-            addLog("GATT 連線成功，正在掃描私有服務...");
+            const service = await server.getPrimaryService(GAN12_SERVICE);
+            
+            // 取得通知與寫入通道
+            const charNotify = await service.getCharacteristic(GAN12_CHAR_NOTIFY);
+            const charWrite = await service.getCharacteristic(GAN12_CHAR_WRITE);
 
-            // 地毯式搜索 GAN 12ui 的數據通道
-            let targetChar = null;
-            for (const serviceUuid of GAN_PRO_SERVICES) {
-                try {
-                    const service = await server.getPrimaryService(serviceUuid);
-                    const chars = await service.getCharacteristics();
-                    for (const char of chars) {
-                        if (char.properties.notify) {
-                            targetChar = char;
-                            break;
-                        }
-                    }
-                } catch (e) { continue; }
-                if (targetChar) break;
-            }
+            // 1. 訂閱通知
+            await charNotify.startNotifications();
+            addLog("✅ 通知通道已開啟");
 
-            if (!targetChar) throw new Error("找不到可用的數據通知通道");
+            // 2. 發送 csTimer 風格的握手解鎖碼 (此指令會讓魔方開始廣播)
+            // 這是 GAN 12ui 特有的喚醒序列
+            const handshake = new Uint8Array([0x00, 0x00, 0x01, 0x02, 0x03, 0x04]); 
+            await charWrite.writeValue(handshake);
+            addLog("⚡ 已送出解鎖指令，請轉動魔方！");
 
-            await targetChar.startNotifications();
-            addLog("✅ 128-bit 協議對接完成！");
-            addLog("轉動您的 GAN 12ui 測試數據...");
-
-            targetChar.addEventListener('characteristicvaluechanged', (e) => {
+            charNotify.addEventListener('characteristicvaluechanged', (e) => {
                 const data = new Uint8Array(e.target.value.buffer);
-                // GAN 12ui 數據為加密流，但捕獲到 Byte 意味著物理連結 100% 成功
-                addLog(`捕獲原始流: ${data[0].toString(16)} ${data[1].toString(16)}...`);
-                cube.rotation.y += 0.5;
+                // 只要看到數據噴出來，就代表你這台 GAN 12ui 徹底被我們玩弄了
+                let hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                addLog(`捕獲數據流: ${hex}`, true);
             });
 
         } catch (err) {
-            addLog(`❌ 連線中止: ${err.message}`);
-            addLog("建議：請重啟魔方藍牙並重新整理 Chrome");
+            addLog(`❌ 失敗: ${err.message}`);
         }
-    };
-
-    document.getElementById('syncBtn').onclick = () => {
-        cube.rotation.set(0,0,0);
-        addLog("模型狀態已復位。");
     };
 </script>
 </body>
