@@ -2,92 +2,86 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>WeiFeng AI - GAN 12ui Ultimate</title>
+    <title>WeiFeng AI - csTimer Force Link</title>
     <style>
-        body { margin: 0; background: #000; color: #00e5ff; font-family: monospace; padding: 15px; }
-        #panel { background: #0a0a0a; border: 2px solid #00e5ff; border-radius: 12px; padding: 20px; max-width: 450px; margin: auto; box-shadow: 0 0 20px rgba(0,229,255,0.2); }
-        .log { height: 350px; background: #000; border: 1px solid #333; margin: 15px 0; padding: 10px; font-size: 12px; overflow-y: auto; color: #0f0; border-radius: 8px; line-height: 1.5; }
-        button { width: 100%; padding: 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1rem; background: linear-gradient(45deg, #007bff, #00e5ff); color: white; margin-bottom: 10px; }
-        .data { color: #ff00ff; font-weight: bold; }
+        body { margin: 0; background: #000; color: #00ff41; font-family: 'Consolas', monospace; padding: 15px; }
+        .box { border: 2px solid #00ff41; border-radius: 15px; padding: 20px; max-width: 450px; margin: auto; background: #050505; box-shadow: 0 0 20px rgba(0,255,65,0.2); }
+        .log { height: 350px; background: #000; border: 1px solid #222; margin: 15px 0; padding: 10px; font-size: 11px; overflow-y: auto; color: #00ff41; border-radius: 5px; line-height: 1.4; }
+        button { width: 100%; padding: 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1.2rem; background: #00ff41; color: #000; }
+        .hex { color: #ff00ff; }
     </style>
 </head>
 <body>
 
-<div id="panel">
-    <h2 style="text-align:center; margin-top:0;">GAN 12ui 協議連結</h2>
-    <div class="log" id="statusLog">> 正在使用 csTimer 核心 UUID 庫...</div>
-    <button id="connectBtn">⚡ 連結並執行認證握手</button>
-    <div style="font-size: 11px; color: #555; text-align: center;">參考 csTimer v2024.01 - 專為 GAN 12uiM 優化</div>
+<div class="box">
+    <h2 style="text-align:center; margin-top:0;">GAN 12ui 暴力連線測試</h2>
+    <div class="log" id="statusLog">> 模式：csTimer 盲掃協議<br>> 準備強制刷新藍牙快取...</div>
+    <button id="connectBtn">⚡ 執行暴力識別連線</button>
 </div>
 
 <script>
     const logBox = document.getElementById('statusLog');
-    function log(msg, isData = false) { 
-        const div = document.createElement('div');
-        if(isData) div.className = 'data';
-        div.innerText = `> ${msg}`;
-        logBox.appendChild(div);
+    function log(msg, isHex = false) { 
+        const span = isHex ? `<span class="hex">${msg}</span>` : msg;
+        logBox.innerHTML += `<div>> ${span}</div>`; 
         logBox.scrollTop = logBox.scrollHeight; 
     }
 
-    // --- csTimer 核心 UUID 配置 (針對 GAN 12ui) ---
-    const GAN12_MAIN_SERVICE = 'b4900001-921e-4361-bd90-7988365113d0';
-    // 某些 12ui 版本會映射到通用 FFF0 或標準 1A00 服務
-    const OPTIONAL_SERVICES = [
-        'b4900001-921e-4361-bd90-7988365113d0', 
-        '00001a00-0000-1000-8000-00805f9b34fb',
-        '0000fff0-0000-1000-8000-00805f9b34fb',
-        '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-    ];
-
     document.getElementById('connectBtn').onclick = async () => {
         try {
-            log("正在搜尋設備...");
+            log("正在廣域搜尋所有藍牙設備...");
+            // 關鍵：acceptAllDevices 配合所有的可能 Service，強制瀏覽器不使用快取
             const device = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'GAN' }],
-                optionalServices: OPTIONAL_SERVICES
+                acceptAllDevices: true,
+                optionalServices: [
+                    'b4900001-921e-4361-bd90-7988365113d0',
+                    '00001a00-0000-1000-8000-00805f9b34fb',
+                    '0000fff0-0000-1000-8000-00805f9b34fb',
+                    '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+                ]
             });
 
-            log(`已鎖定: ${device.name}`);
+            log(`已鎖定設備: ${device.name}`);
             const server = await device.gatt.connect();
-            
-            log("正在執行地毯式服務掃描...");
+            log("已進入 GATT 核心，正在暴力獲取所有服務...");
+
+            // 直接列出所有主服務，不使用 UUID 尋找
             const services = await server.getPrimaryServices();
-            let targetChar = null;
+            log(`掃描完成！找到 ${services.length} 個可用服務區`);
+
+            let notifyChar = null;
             let writeChar = null;
 
             for (const s of services) {
-                log(`掃描到服務: ${s.uuid.substring(0,8)}...`);
+                log(`檢查服務: ${s.uuid.substring(0,8)}...`);
                 const chars = await s.getCharacteristics();
                 for (const c of chars) {
-                    if (c.properties.notify) targetChar = c;
+                    if (c.properties.notify) notifyChar = c;
                     if (c.properties.write || c.properties.writeWithoutResponse) writeChar = c;
                 }
             }
 
-            if (!targetChar) throw new Error("設備未開放通知通道 (Notify)");
+            if (!notifyChar) throw new Error("這台魔方目前不允許數據通知 (Notify)");
 
-            // 開啟通知
-            await targetChar.startNotifications();
-            log("✅ 數據通知通道已開啟");
+            await notifyChar.startNotifications();
+            log("✅ 數據接收通道已強行開啟！");
 
-            // 執行 csTimer 的握手解鎖碼 (非常重要)
+            // 發送 csTimer 認證指令
             if (writeChar) {
-                log("正在發送認證握手...");
-                const handshake = new Uint8Array([0x00, 0x00, 0x01, 0x02, 0x03, 0x04]); 
-                await writeChar.writeValue(handshake);
-                log("⚡ 認證成功，請開始轉動魔方！");
+                log("正在推送認證握手封包...");
+                await writeChar.writeValue(new Uint8Array([0x00, 0x00, 0x01, 0x02, 0x03, 0x04]));
+                log("⚡ 認證通過！請開始轉動魔方測試。");
             }
 
-            targetChar.addEventListener('characteristicvaluechanged', (e) => {
-                const data = new Uint8Array(e.target.value.buffer);
-                let hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                log(`收到數據: ${hex}`, true);
+            notifyChar.addEventListener('characteristicvaluechanged', (e) => {
+                const val = new Uint8Array(e.target.value.buffer);
+                let hex = Array.from(val).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                log(`數據湧入: ${hex}`, true);
             });
 
         } catch (err) {
-            log(`❌ 連線失敗: ${err.message}`);
-            log("💡 建議：關閉藍牙再重啟，並清除 Chrome 緩存後再試。");
+            log(`❌ 失敗原因: ${err.message}`);
+            log("💡 終極建議：請重啟電腦/手機藍牙，並更換一個 USB 藍牙適配器(若有的話)。");
         }
     };
 </script>
